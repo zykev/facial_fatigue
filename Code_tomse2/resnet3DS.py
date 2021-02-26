@@ -54,8 +54,8 @@ class BasicBlock(nn.Module):
         self.conv1 = conv3x3x3(in_planes, planes, stride)
         self.bn1 = nn.BatchNorm3d(planes)
         self.relu = nn.ReLU(inplace=True)
-        #self.conv2 = conv3x3x3(planes, planes)
-        #self.bn2 = nn.BatchNorm3d(planes)
+        # self.conv2 = conv3x3x3(planes, planes)
+        # self.bn2 = nn.BatchNorm3d(planes)
         self.downsample = downsample
         self.stride = stride
 
@@ -64,10 +64,10 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        #out = self.relu(out)
+        # out = self.relu(out)
 
-        #out = self.conv2(out)
-        #out = self.bn2(out)
+        # out = self.conv2(out)
+        # out = self.bn2(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -132,7 +132,7 @@ class ResNet(nn.Module):
                  n_classes=400,
                  output_dim=1,
                  two_fc=False,
-                 non_local=False):
+                 non_local_state=[False, False, False, False]):
         super().__init__()
 
         block_inplanes = [int(x * widen_factor) for x in block_inplanes]
@@ -151,23 +151,26 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, block_inplanes[0], layers[0],
-                                       shortcut_type)
+                                       shortcut_type,
+                                       non_local=non_local_state[0])
         self.layer2 = self._make_layer(block,
                                        block_inplanes[1],
                                        layers[1],
                                        shortcut_type,
-                                       stride=2)
+                                       stride=2,
+                                       non_local=non_local_state[1])
         self.layer3 = self._make_layer(block,
                                        block_inplanes[2],
                                        layers[2],
                                        shortcut_type,
                                        stride=2,
-                                       non_local=non_local)
+                                       non_local=non_local_state[2])
         self.layer4 = self._make_layer(block,
                                        block_inplanes[3],
                                        layers[3],
                                        shortcut_type,
-                                       stride=2)
+                                       stride=2,
+                                       non_local=non_local_state[3])
 
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
         # self.avgpool = nn.AvgPool3d(kernel_size=(4, 7, 7))
@@ -231,9 +234,11 @@ class ResNet(nn.Module):
             layers.append(block(self.in_planes, planes))
 
         # add non-local block here
-        if non_local:
+        if non_local and last_idx != 0:
             layers.append(NLBlockND(in_channels=self.in_planes, dimension=3))
-            #layers.append(block(self.in_planes, planes))
+            layers.append(block(self.in_planes, planes))
+        elif non_local and last_idx == 0:
+            layers.append(NLBlockND(in_channels=self.in_planes, dimension=3))
 
         return nn.Sequential(*layers)
 
@@ -263,13 +268,13 @@ class ResNet(nn.Module):
         return x
 
 
-def generate_model(model_depth, non_local=False, first_channel=8, **kwargs):
+def generate_model(model_depth, non_local_state=[False, False, False, False], first_channel=8, **kwargs):
     assert model_depth in [10, 18, 34, 50, 101, 152, 200]
 
     if model_depth == 10:
-        model = ResNet(BasicBlock, [1, 1, 1, 1], get_inplanes(first_channel=first_channel), non_local=non_local, **kwargs)
+        model = ResNet(BasicBlock, [1, 1, 1, 1], get_inplanes(first_channel=first_channel), non_local_state=non_local_state, **kwargs)
     elif model_depth == 18:
-        model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(first_channel=first_channel), non_local=non_local, **kwargs)
+        model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(first_channel=first_channel), non_local_state=non_local_state, **kwargs)
     elif model_depth == 34:
         model = ResNet(BasicBlock, [3, 4, 6, 3], get_inplanes(), **kwargs)
     elif model_depth == 50:

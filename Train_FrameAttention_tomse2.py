@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
-from Code_tomse import load_materials, util, Model_Parts, pytorchtools
+from Code_tomse2 import load_materials, util, Model_Parts, pytorchtools
 import time
 from datetime import datetime
 import pdb
@@ -39,18 +39,22 @@ parser.add_argument('--is_test', default=True, dest='is_test',
                     help='testing when is traing (default: True)')
 parser.add_argument('--is_pretreat', default=False, dest='is_pretreat',
                     help='pretreating when is traing (default: False)')
-parser.add_argument('--accumulation_step', default=16, type=int, metavar='M',
+parser.add_argument('--accumulation_step', default=1, type=int, metavar='M',
                     help='accumulation_step')
-parser.add_argument('--loss_alpha', default=1/50, type=float,
+parser.add_argument('--loss_alpha', default=0.1, type=float,
                     help='adjust loss for crossentrophy')
+parser.add_argument('--num_classes', default=10, type=int,
+                    help='number of categorical classes')
+parser.add_argument('--first_channel', default=8, type=int,
+                    help='number of channel in first convolution layer in resnet')
+parser.add_argument('--non_local_pos', default=3, type=int,
+                    help='the position to add non_local block')
 
 
 best_prec_total1 = 10
 best_prec_mse1 = 10
-save_name = datetime.now().strftime('%m-%d_%H-%M') + '.txt'
 args = parser.parse_args()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#print(device)
 '''MyNote '''
 
 
@@ -64,56 +68,124 @@ class Abs(nn.Module):
     def forward(self,input,target):
         return abs_double(input, target)
 
-class CoralLoss(nn.Module):
-    def __init__(self,weight=1):
-        super(CoralLoss, self).__init__()
-        self.weight = weight
+#Label smoothing
+
+class CrossEntropyLoss_label_smooth(nn.Module):
+    def __init__(self, num_classes=10, smoothing=0.1):
+        super(CrossEntropyLoss_label_smooth, self).__init__()
+        self.num_classes = num_classes
+        self.smoothing = smoothing
 
     def forward(self, outputs, targets):
 
-        log_prob = (nn.functional.logsigmoid(outputs) * targets + (nn.functional.logsigmoid(outputs) - targets) * (1 - targets)) * self.weight
-        loss = - torch.sum(log_prob, dim = 1)
-        loss = torch.mean(loss)
+        N = targets.size(0)
+        # torch.Size([8, 10])
+        # 初始化一个矩阵, 里面的值都是epsilon / (num_classes - 1)
+        smoothed_labels = torch.full(size=(N, self.num_classes), fill_value=self.smoothing / (self.num_classes - 1)).to(device)
+
+        targets = targets.data
+        # 为矩阵中的每一行的某个index的位置赋值为1 - epsilon
+        smoothed_labels.scatter_(dim=1, index=targets.unsqueeze(dim=1), value=1 - self.smoothing)
+        # 调用torch的log_softmax
+        log_prob = nn.functional.log_softmax(outputs, dim=1)
+        # 用之前得到的smoothed_labels来调整log_prob中每个值
+        loss = - torch.sum(log_prob * smoothed_labels) / N
 
         return loss
 
-def coral_loss(logits, levels, imp=1):
-    val = -torch.sum((nn.functional.logsigmoid(logits) * levels + (nn.functional.logsigmoid(logits) - logits) * (1 - levels)) * imp, dim = 1)
-    return torch.mean(val)
+
+class CrossEntropyLoss_bootstraps(nn.Module):
+    def __init__(self, num_classes=10, weight_lmda=0.5):
+        super(CrossEntropyLoss_bootstraps, self).__init__()
+        self.num_classes = num_classes
+        self.weight_lmda = weight_lmda
+
+    def forward(self, outputs, targets, epoch):
+        N = targets.size(0)
+        targets_weight = (1 - epoch / args.epochs) ** self.weight_lmda
+        # get predicted labels
+        _, pred = outputs.topk(1, 1, largest=True, sorted=True)
+
+        log_prob = nn.functional.log_softmax(outputs, dim=1)
+
+        # onehot index matrix of targets and pred
+        onehot_targets = torch.zeros(size=(N, self.num_classes)).to(device)
+        targets = targets.data
+        onehot_targets.scatter_(dim=1, index=targets.unsqueeze(dim=1), value=1)
+
+        onehot_pred = torch.zeros(size=(N, self.num_classes)).to(device)
+        onehot_pred.scatter_(dim=1, index=pred, value=1)
+
+        weight_labels = targets_weight * onehot_targets + (1 - targets_weight) * onehot_pred
+
+        loss = - torch.sum(log_prob * weight_labels) / N
+
+        return loss
 
 
 def load_model(dir_model):
     MSEcriterion = nn.MSELoss()
 
 
-    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=1, feature_dim=512, at_type='nonLocal')
+    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=args.num_classes, feature_dim=128, at_type='nonLocal')
     model = Model_Parts.LoadParameter(model, dir_model)
 
     model1 = torch.nn.DataParallel(Model_Parts.FullModel_Loss(model, MSEcriterion))
     return model1
 
-early_stopping = pytorchtools.EarlyStopping(patience=20)
+def get_path(lr, wd):
+    save_name = datetime.now().strftime('%m-%d_%H-%M')
+    folder = 'lr'+str(lr)+'wd'+str(wd) + '_' + save_name
+    if os.path.exists(folder):
+        print("There is the folder")
+        folder = folder + '_c'
+        os.mkdir(folder)
+    else:
+        os.mkdir(folder)
+
+    return folder
+
+
+new_folder = get_path(args.lr, args.weight_decay)
+early_stopping = pytorchtools.EarlyStopping(patience=20, path=new_folder+'/checkpoint.pt')
 
 def main():
     global args, best_prec_total1, best_prec_mse1, device
     accumulation_step = args.accumulation_step
+    print('epochs', args.epochs)
     print('learning rate:', args.lr)
     print('weight decay:', args.weight_decay)
     print('accumulation_step:', accumulation_step)
     print('loss alpha:', args.loss_alpha)
+    print('num classes:', args.num_classes)
+    print('first_channel', args.first_channel)
+    print('non_local_pos', args.non_local_pos)
+
+
+    # save model superparameter
+    with open(os.path.join(new_folder, "hyperparam.txt"), "a+") as f:
+        f.write('epochs' + ' ' + str(args.epochs) + '\n')
+        f.write('learning rate' + ' ' + str(args.lr) + '\n')
+        f.write('weight decay' + ' ' + str(args.weight_decay) + '\n')
+        f.write('accumulation step' + ' ' + str(accumulation_step) + '\n')
+        f.write('loss alpha' + ' ' + str(args.loss_alpha) + '\n')
+        f.write('num classes' + ' ' + str(args.num_classes) + '\n')
+        f.write('first channel' + ' ' + str(args.first_channel) + '\n')
+        f.write('non local pos' + ' ' + str(args.non_local_pos) + '\n')
+
     dir_model = r"./model/epoch47_0.0653"
 
     ''' Load data '''
 
-    # arg_rootTrain = r'/home/biai/BIAI/mood/DataS_Face/'
-    # arg_listTrain = r'./Data/DataS_Train.txt'
-    # arg_rooteval = r'/home/biai/BIAI/mood/DataS_Face/'
-    # arg_listeval = r'./Data/DataS_Eval.txt'
+    arg_rootTrain = r'/home/xiaotao/Desktop/Data-S375-cut224'
+    arg_listTrain = r'./Data/376Data-Train.txt'
+    arg_rooteval = r'/home/xiaotao/Desktop/Data-S375-cut224'
+    arg_listeval = r'./Data/376Data-Eval.txt'
 
-    arg_rootTrain = r'/home/biai/BIAI/mood/Data-S235/'
-    arg_listTrain = r'/home/biai/BIAI/mood/onlyfat_selfa3DS_class_tomse/Data/Data-fatigue-Train.txt'
-    arg_rooteval = r'/home/biai/BIAI/mood/Data-S235/'
-    arg_listeval = r'/home/biai/BIAI/mood/onlyfat_selfa3DS_class_tomse/Data/Data-fatigue-Eval.txt'
+    # arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375-cut224/'
+    # arg_listTrain = r'./Data/376Data-Train.txt'
+    # arg_rooteval = r'/home/biai/BIAI/mood/Data-S375-cut224/'
+    # arg_listeval = r'./Data/376Data-Eval.txt'
 
     train_loader, val_loader = load_materials.LoadVideoAttention(arg_rootTrain, arg_listTrain, arg_rooteval,
                                                                       arg_listeval)
@@ -124,7 +196,7 @@ def main():
         if loopTest == True:
             dir_path = r"F:\Documents\biai-release_test\model"
             for mod in os.listdir(dir_path):
-                print('-'*10,mod)
+                print('-'*10, mod)
                 dir_model = dir_path + "/" + mod
                 model = load_model(dir_model)
                 validate(val_loader, model)
@@ -135,11 +207,16 @@ def main():
 
         return
 
+    first_channel = args.first_channel
+    feature_dim = first_channel * 2
+
     ''' Load model '''
-    # MSEcriterion = nn.MSELoss()
-    criterion1 = CoralLoss(weight=1)
+    criterion1 = nn.CrossEntropyLoss()
+    #criterion1 = CrossEntropyLoss_label_smooth(num_classes=10, smoothing=0.1)
+    # criterion1 = CrossEntropyLoss_bootstraps(num_classes=args.num_classes, weight_lmda=0.5)
     criterion2 = nn.MSELoss()
-    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=10, feature_dim=256, at_type='nonLocal')
+    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=args.num_classes, feature_dim=feature_dim, non_local_pos=args.non_local_pos,
+                                                         first_channel=first_channel)
     if args.is_pretreat:
         print("pretreat.............")
         model = Model_Parts.LoadParameter(model, dir_model)
@@ -184,7 +261,7 @@ def main():
                 'totalloss': totalloss1,
                 'mseloss': mseloss1,
                 'acc': ceacc1,
-            })
+            }, path=new_folder)
         
         if is_better:
             print('better model!')
@@ -196,11 +273,11 @@ def main():
                 'totalloss': totalloss1,
                 'mseloss': mseloss1,
                 'acc': ceacc1,
-            })
+            }, path=new_folder)
         else:
             print('Model too bad & not save')
             
-        with open(save_name, "a+") as f:
+        with open(os.path.join(new_folder, "result.txt"), "a+") as f:
             f.write(str(round(totalloss,3))+" "+str(round(totalloss1,3))+" "+str(round(mseloss,3))+" "+str(round(mseloss1,3))+" "+str(round(ceacc,3))+" "+str(round(ceacc1,3)))
             f.write("\n")
             f.flush()
@@ -214,7 +291,7 @@ def main():
                 'totalloss': totalloss1,
                 'mseloss': mseloss1,
                 'acc': ceacc1,
-            })
+            }, path=new_folder)
             
 
 def train(train_loader, model, criterion1, criterion2, loss_alpha, optimizer, epoch, accumulation_step):
@@ -228,35 +305,24 @@ def train(train_loader, model, criterion1, criterion2, loss_alpha, optimizer, ep
     num_of_data = 0
     end = time.time()
     score_list = []
-    for batch_idx, (input_image, sample, sample_bi) in enumerate(train_loader):
-        # measure data loading time
-        # print(len(sample))
-        # print(sample[0])
+    for batch_idx, (input_image, sample) in enumerate(train_loader):
+
         data_time.update(time.time() - end)
-        #sample = sample[0]
-        sample_catego = util.label_to_categorical(sample, 10)
+
+        sample_catego = util.label_to_categorical(sample, args.num_classes)
         sample = sample.to(device)
-        sample_bi = sample_bi.to(device)
         sample_catego = sample_catego.to(device)
 
         input_var = torch.autograd.Variable(input_image).permute((0, 2, 1, 3, 4))
         input_var = input_var.to(device)
-        #input_var = np.transpose(input_var, (0, 2, 1, 3, 4))
-        outputs = model(input_var)
-        # emotion = torch.autograd.Variable(sample['emotion']).to(device)
-        # energy = torch.autograd.Variable(sample['energy']).to(device)
-        # fatigue = torch.autograd.Variable(sample['fatigue']).to(device)
-        # attention = torch.autograd.Variable(sample['attention']).to(device)
-        # motivate = torch.autograd.Variable(sample['motivate']).to(device)
-        # Global_Status = torch.autograd.Variable(sample['Global_Status']).to(device)
 
-        #fatigue_loss = criterion(outputs, torch.Tensor([int(i) for i in sample['fatigue']]).long())
-        fatigue_loss_ce = criterion1(outputs, sample_bi)
-        outputs_cont, class_probs = util.output_coral_tomse(outputs, 10)
+        outputs = model(input_var)
+
+        fatigue_loss_ce = criterion1(outputs, sample_catego)
+        outputs_cont = util.output_tomse(outputs, args.num_classes)
         fatigue_loss_mse = criterion2(outputs_cont, sample)
 
-        #acc = util.calculate_accuracy(outputs, torch.Tensor([int(i) for i in sample['fatigue']]).long())
-        acc = util.calculate_coral_accuracy(class_probs, sample_catego)
+        acc = util.calculate_accuracy(outputs, sample_catego)
         
         loss = loss_alpha * fatigue_loss_ce + fatigue_loss_mse
         compact = torch.tensor([fatigue_loss_mse])
@@ -316,34 +382,29 @@ def validate(val_loader, model, criterion1, criterion2, loss_alpha):
     score_list = []
     model.eval()
     with torch.no_grad():
-        for batch_idx, (input_image, sample, sample_bi) in enumerate(val_loader):
+        for batch_idx, (input_image, sample) in enumerate(val_loader):
             # measure data loading time
             data_time.update(time.time() - end)
-            #sample = sample[0]
-            sample_catego = util.label_to_categorical(sample, 10)
+
+            sample_catego = util.label_to_categorical(sample, args.num_classes)
             sample = sample.to(device)
-            sample_bi = sample_bi.to(device)
             sample_catego = sample_catego.to(device)
 
             input_var = torch.autograd.Variable(input_image).permute((0, 2, 1, 3, 4))
             input_var = input_var.to(device)
-            #input_var = np.transpose(input_var, (0, 2, 1, 3, 4))
+
             outputs = model(input_var)
 
-            #input_var = torch.autograd.Variable(input_image)
-            #input_var = np.transpose(input_var, (0, 2, 1, 3, 4))
             # compute output
             # loss, compact, frame_outputs, groud_truth = model(input_var, emotion, energy, fatigue, attention, motivate,
             #                                                   Global_Status)
 
-            #fatigue_loss = criterion(outputs, torch.Tensor([int(i) for i in sample['fatigue']]).long())
-            #acc = util.calculate_accuracy(outputs, torch.Tensor([int(i) for i in sample['fatigue']]).long())
-            fatigue_loss_ce = criterion1(outputs, sample_bi)
-            outputs_cont, class_probs = util.output_coral_tomse(outputs, 10)
+            fatigue_loss_ce = criterion1(outputs, sample_catego)
+            outputs_cont = util.output_tomse(outputs, args.num_classes)
             fatigue_loss_mse = criterion2(outputs_cont, sample)
 
 
-            acc = util.calculate_coral_accuracy(class_probs, sample_catego)
+            acc = util.calculate_accuracy(outputs, sample_catego)
 
             loss = loss_alpha * fatigue_loss_ce + fatigue_loss_mse
 
@@ -378,7 +439,7 @@ def validate(val_loader, model, criterion1, criterion2, loss_alpha):
     print(' Average Loss2(mse loss): {}'.format(round(float(sum_loss.mean()), 4)))
     print(' Average accuracy: {}'.format(round(float(accuracies.avg), 3)))
     early_stopping(round(float(losses.avg),4), model)
-    #return sum_loss.mean()
+
     return losses.avg, float(sum_loss.mean()), accuracies.avg
 
 if __name__ == '__main__':

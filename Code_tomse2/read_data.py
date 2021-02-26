@@ -23,7 +23,7 @@ def load_imgs_total_frame(video_root, video_list, data_doubled=False):
 
         for id, line in enumerate(imf):
 
-            video_label = line.strip().split(' ')
+            video_label = line.strip().split(',')
 
             # video_name, emotion, energy, fatigue, attention, motivate, Global_Status = video_label
             video_name, fatigue = video_label
@@ -49,7 +49,7 @@ def load_imgs_total_frame(video_root, video_list, data_doubled=False):
                     (os.path.join(video_path, frame), fatigue))
 
             ###  return video frame index  #####
-            ed_list = sample_seg_impro(imgs_first_dict[video_name])
+            ed_list = sample_seg_full(imgs_first_dict[video_name])
             for seg_list in ed_list:
                 # if fatigue > 0.8:
                 #     imgs_first.append(seg_list)
@@ -81,6 +81,16 @@ def load_imgs_total_frame(video_root, video_list, data_doubled=False):
         #ind = np.arange(0,len(index),1)
     return imgs_first, index
 
+def sample_seg_full(orig_list, seg_num=32):
+    ed_list = []
+    part = int(len(orig_list)) // seg_num
+    if part == 0:
+        print('less 32')
+    else:
+        for n in range(int(part)):
+            ed_list.append(orig_list[n * seg_num: n * seg_num + seg_num])
+
+    return ed_list
 
 def sample_seg(orig_list, seg_num=100, seg_num2=64):
     s_list = []
@@ -182,12 +192,11 @@ class FrameAttentionDataSet(data.Dataset):
     '''
 
     def __init__(self, video_root, video_list, transform=None, sample_rate=None,
-                 transformVideoAug=None, transformVideoAug_com=None):
+                 transformVideoAug=None):
         self.imgs_first_dict, self.indexes = load_imgs_total_frame(video_root, video_list, data_doubled=False)
         self.transform = transform
         self.sample_rate = sample_rate
         self.transformVideoAug = transformVideoAug
-        self.transformVideoAug_com = transformVideoAug_com
 
     def __getitem__(self, index):
         image_label = self.imgs_first_dict[self.indexes[index]]

@@ -8,11 +8,11 @@ import pandas as pd
 from Code_tomse2 import Model_Parts
 
 
-def save_checkpoint(state):
-    if not os.path.exists('./model'):
-        os.makedirs('./model')
+def save_checkpoint(state, path='.'):
+    if not os.path.exists(path + '/model'):
+        os.makedirs(path + '/model')
 
-    save_dir = './model/epoch'+str(state['epoch']) + '_loss_' + str(round(float(state['totalloss']), 4)) + '_acc_' + str(round(float(state['acc']), 3))
+    save_dir = path + '/model/epoch'+str(state['epoch']) + '_loss_' + str(round(float(state['totalloss']), 4)) + '_acc_' + str(round(float(state['acc']), 3))
     torch.save(state, save_dir, _use_new_zipfile_serialization=False)
     print(save_dir)
 

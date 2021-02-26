@@ -66,16 +66,18 @@ class VectorsAttention(nn.Module):
 
 
 class FullModal_VisualFeatureAttention(nn.Module):
-    def __init__(self, num_class=10, feature_dim=256, at_type='nonLocal', first_channel = None):
+    def __init__(self, num_class=10, feature_dim=256, non_local_pos=3, first_channel=8):
         super(FullModal_VisualFeatureAttention, self).__init__()
 
-        # embeding
-        # _structure = resnet18(pretrained=True)
-        if at_type == 'nonLocal':
-            non_local = True
-        else:
-            non_local = False
-        _structure = resnet3DS.generate_model(10, non_local=non_local, n_classes=num_class, output_dim=feature_dim,
+        self.liner = nn.Linear(feature_dim, num_class)
+
+        # non_local block position
+        non_local_state = [False, False, False, False]
+        assert non_local_pos in [0, 1, 2, 3, 4]
+        if non_local_pos != 0:
+            non_local_state[non_local_pos - 1] = True
+
+        _structure = resnet3DS.generate_model(10, non_local_state=non_local_state, n_classes=num_class, output_dim=feature_dim,
                                               two_fc=True, first_channel=first_channel)
         # _structure = resnet2p1d.generate_model(10, non_local=non_local, n_classes=num_class, output_dim=feature_dim,
         #                                        two_fc=True)
