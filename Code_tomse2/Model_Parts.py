@@ -16,7 +16,11 @@ def LoadParameter(_structure, _parameterDir):
     pretrained_state_dict = checkpoint['state_dict']
     model_state_dict = _structure.state_dict()
     for key in pretrained_state_dict:
-        model_state_dict[key.replace('module.model.', '')] = pretrained_state_dict[key]
+        if key != 'module.visual_encoder.fc.weight' and key != 'module.visual_encoder.fcadd.weight':
+            model_state_dict[key.replace('module.', '')] = pretrained_state_dict[key]
+        else:
+            model_state_dict['visual_encoder.fc.weight'] = pretrained_state_dict['module.visual_encoder.fc.weight']
+            model_state_dict['liner.2.weight'] = pretrained_state_dict['module.visual_encoder.fcadd.weight']
 
     _structure.load_state_dict(model_state_dict)
     return _structure
@@ -69,8 +73,6 @@ class FullModal_VisualFeatureAttention(nn.Module):
     def __init__(self, num_class=10, feature_dim=256, non_local_pos=3, first_channel=8):
         super(FullModal_VisualFeatureAttention, self).__init__()
 
-        self.liner = nn.Linear(feature_dim, num_class)
-
         # non_local block position
         non_local_state = [False, False, False, False]
         assert non_local_pos in [0, 1, 2, 3, 4]
@@ -78,11 +80,11 @@ class FullModal_VisualFeatureAttention(nn.Module):
             non_local_state[non_local_pos - 1] = True
 
         _structure = resnet3DS.generate_model(10, non_local_state=non_local_state, n_classes=num_class, output_dim=feature_dim,
-                                              two_fc=True, first_channel=first_channel)
-        # _structure = resnet2p1d.generate_model(10, non_local=non_local, n_classes=num_class, output_dim=feature_dim,
-        #                                        two_fc=True)
+                                              two_fc=False, first_channel=first_channel)
+
         # _structure = resnet3D.resnet3D50(non_local=True, num_classes=1024)
         self.visual_encoder = _structure
+        self.liner = nn.Sequential(nn.ReLU(inplace=False), nn.Dropout(0.6), nn.Linear(feature_dim, num_class, bias=False))
         # self.visual_encoder
         # _parameterDir = '_88.65.pth.tar'
         # self.visual_encoder = LoadParameter(_structure, _parameterDir)
@@ -101,9 +103,9 @@ class FullModal_VisualFeatureAttention(nn.Module):
 
         feature_s = self.visual_encoder(audio_feature)
 
-        # pred_score = self.liner(feature_s)
+        pred_score = self.liner(feature_s)
 
-        return feature_s
+        return pred_score
 
 
 '''=======================================   FullModal: Model And Loss   ============================================'''

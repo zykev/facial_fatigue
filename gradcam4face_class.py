@@ -4,9 +4,10 @@ from skimage.transform import resize
 import torch
 from torch.autograd import Function
 from torchvision import transforms
-from Code import Model_Parts, read_data, resnet3DS
+from Code_tomse2 import Model_Parts, read_data
 from vidaug.augmentors import affine, crop
 import numpy as np
+from PIL import Image
 
 "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6371279/"
 
@@ -74,7 +75,7 @@ class ModelOutputs():
                             x = x.view(x.size(0), -1)
                         else:
                             x = module(x)
-                            x = torch.sigmoid(x)
+                            x = torch.nn.functional.log_softmax(x, dim=1)
 
         return target_activations, x
 
@@ -96,6 +97,19 @@ def show_cam_on_image(img, mask):
     cam = cam / np.max(cam)
     return np.uint8(255 * cam)
 
+def cams_on_img_seqs(cams, img_dir):
+    # get image
+    cam_seqs = []
+    for i in range(len(img_dir)):
+        img = cv2.imread(img_dir[i])
+        img = np.float32(img) / 255
+        # Opencv loads as BGR:
+        img = img[:, :, ::-1]
+        img = resize(img, (224, 224, 3))
+        cam = show_cam_on_image(img, cams[i, :, :])
+        cam = Image.fromarray(cam)
+        cam_seqs.append(cam)
+    return cam_seqs
 
 class GradCam:
     def __init__(self, model, feature_module, target_layer_names, use_cuda):
@@ -118,15 +132,22 @@ class GradCam:
         features, output = self.extractor(input_img)
 
         if target_category == None:
-            target_category = np.argmax(output.cpu().data.numpy())
+            target_category = torch.argmax(output.cpu(), dim=1)
+            target_category = target_category.view([output.shape[0], 1])
+        else:
+            target_category = torch.full(size=(output.shape[0], 1), fill_value=target_category)
+        one_hot = torch.full(size=output.size(), fill_value=0).float()
+        one_hot = one_hot.scatter_(dim=1, index=target_category, value=1)
 
-        one_hot = np.zeros((1, output.size()[-1]), dtype=np.float32)
-        one_hot[0][target_category] = 1
-        one_hot = torch.from_numpy(one_hot).requires_grad_(True)
+        one_hot = one_hot.clone().detach().requires_grad_(True)
+
+        # one_hot = np.zeros((1, output.size()[-1]), dtype=np.float32)
+        # one_hot[0][target_category] = 1
+        # one_hot = torch.from_numpy(one_hot).requires_grad_(True)
         if self.cuda:
             one_hot = one_hot.cuda()
 
-        one_hot = torch.sum(one_hot * output)
+        one_hot = torch.sum(one_hot * output) / output.shape[0]
 
         self.feature_module.zero_grad()
         self.model.zero_grad()
@@ -135,20 +156,24 @@ class GradCam:
         grads_val = self.extractor.get_gradients()[-1].cpu().data.numpy()
 
         target = features[-1]
-        target = target.cpu().data.numpy()[0, :]
+        cams = []
+        for i in range(target.shape[0]):
+            sub_target = target.cpu().data.numpy()[i, :]
 
-        # weights = np.mean(grads_val, axis=(2, 3, 4))[0, :] / np.prod(grads_val.shape[2:5])
-        weights = np.mean(grads_val, axis=(2, 3, 4))[0, :]
-        cam = np.zeros(target.shape[1:], dtype=np.float32)
+            # weights = np.mean(grads_val, axis=(2, 3, 4))[0, :] / np.prod(grads_val.shape[2:5])
+            weights = np.mean(grads_val, axis=(2, 3, 4))[i, :] / np.prod(grads_val.shape[2:5])
+            cam = np.zeros(sub_target.shape[1:], dtype=np.float32)
 
-        for i, w in enumerate(weights):
-            cam += w * target[i, :, :, :]
+            for i, w in enumerate(weights):
+                cam += w * sub_target[i, :, :, :]
 
-        cam = np.maximum(cam, 0)
-        cam = resize(cam, input_img.shape[2:])
-        cam = cam - np.min(cam)
-        cam = cam / np.max(cam)
-        return cam
+            cam = np.maximum(cam, 0)
+            cam = resize(cam, input_img.shape[2:])
+            cam = cam - np.min(cam)
+            cam = cam / np.max(cam)
+            cams.append(cam)
+
+        return cams
 
 
 class GuidedBackpropReLU(Function):
@@ -249,22 +274,19 @@ def deprocess_image(img):
 # dataloader
 def LoadPredictDataset(root_train, arg_train_list):
 
-    pre_dataset = read_data.FrameAttentionDataSetOne(
-            video_root=root_train,
-            video_list=arg_train_list,
-            transformVideoAug=transforms.Compose([affine.Resize([256, 256]), crop.CenterCrop(224)]),
-            transform=transforms.Compose([transforms.ToTensor(),
-                                          transforms.Normalize(mean=(0.5, 0.5, 0.5),
-                                                               std=(0.5, 0.5, 0.5))]),
-            sample_rate=3.5
-        )
+    pre_loader = read_data.LoadData_cam(
+        video_root=root_train,
+        video_list=arg_train_list,
+        transformVideoAug=transforms.Compose([affine.Resize([256, 256]), crop.CenterCrop(224)]),
+        transform=transforms.Compose([transforms.ToTensor(),
+                                      transforms.Normalize(mean=(0.5, 0.5, 0.5),
+                                                           std=(0.5, 0.5, 0.5))])
+    )
 
-    pre_loader = torch.utils.data.DataLoader(
-            pre_dataset,
-            batch_size=4, shuffle=False,
-            num_workers=0, pin_memory=True)
+    pre_dataset, dataset_dict = pre_loader.image_process()
 
-    return pre_loader
+    return pre_dataset, dataset_dict
+
 
 
 if __name__ == '__main__':
@@ -278,40 +300,35 @@ if __name__ == '__main__':
     args = get_args()
 
     import os
-    dir_model = "./model/checkpoint.pt"
-    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=1, feature_dim=512, at_type='nonLocal')
-    # model = resnet3DS.generate_model(18, non_local=True, n_classes=256)
+    dir_model = "./model/epoch17_loss_0.117_acc_0.759.pt"
+    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=2, feature_dim=256, non_local_pos=3,
+                                                         first_channel=64)
     model = Model_Parts.LoadParameter(model, dir_model)
 
 
-
-    # model = models.resnet50(pretrained=True)
     # get grad_cam model
-    grad_cam = GradCam(model=model, feature_module=model.visual_encoder.layer4, \
-                       target_layer_names=["1"], use_cuda=args.use_cuda)
+    grad_cam = GradCam(model=model, feature_module=model.visual_encoder.layer4,
+                       target_layer_names=["0"], use_cuda=args.use_cuda)
 
-    #get image
-    image_dir_path = os.path.join(args.data_dir, args.video_name.split('.')[0])
-    img_list = os.listdir(image_dir_path)
-    img_list.sort(key=lambda x: int(x.split('.')[0]))
-    img_path = os.path.join(image_dir_path, img_list[1])
-    img = cv2.imread(img_path)
-    img = np.float32(img) / 255
-    # Opencv loads as BGR:
-    img = img[:, :, ::-1]
-    # input_img = preprocess_image(img)
+    # #get image
+    # image_dir_path = os.path.join(args.data_dir, args.video_name.split('.')[0])
+    # img_list = os.listdir(image_dir_path)
+    # img_list.sort(key=lambda x: int(x.split('.')[0]))
+    # img_path = os.path.join(image_dir_path, img_list[1])
+    # img = cv2.imread(img_path)
+    # img = np.float32(img) / 255
+    # # Opencv loads as BGR:
+    # img = img[:, :, ::-1]
 
 
     # get input
     data_dir = args.data_dir
     video_name = args.video_name
 
-    pre_loader = LoadPredictDataset(data_dir, video_name)
+    input_img, img_dir = LoadPredictDataset(data_dir, video_name)
 
-    input_img = list(pre_loader)[0][0]
+    # input_img = list(pre_loader)[0][0]
     input_var = np.transpose(input_img, (0, 2, 1, 3, 4))
-
-    # img = np.transpose(input_img[0, :, :, :, :], (1, 2, 3, 0)).numpy() # t * h * w * c
 
 
     # If None, returns the map for the highest scoring category.
@@ -319,9 +336,14 @@ if __name__ == '__main__':
     target_category = None
     grayscale_cam = grad_cam(input_var, target_category)
 
-    img = resize(img, (224, 224, 3))
-    cam = show_cam_on_image(img, grayscale_cam[0, :, :])
-    cv2.imwrite("cam2.jpg", cam)
+    for i in range(len(grayscale_cam)):
+        cam_seqs = cams_on_img_seqs(grayscale_cam[i], img_dir[i])
+        save_name = video_name.split('.')[0] + '_' + str(i) + '.gif'
+        cam_seqs[0].save(os.path.join('./result', save_name), save_all=True, append_images=cam_seqs, duration=0.5)
+
+    # img = resize(img, (224, 224, 3))
+    # cam = show_cam_on_image(img, grayscale_cam[0, :, :])
+    # cv2.imwrite("cam2.jpg", cam)
 
 
     # gb_model = GuidedBackpropReLUModel(model=model, use_cuda=args.use_cuda)

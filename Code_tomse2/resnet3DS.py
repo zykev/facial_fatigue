@@ -177,10 +177,10 @@ class ResNet(nn.Module):
         #self.fc = nn.Linear(block_inplanes[3] * block.expansion, n_classes)
         self.fc = nn.Linear(block_inplanes[3] * block.expansion, output_dim, bias=False)
         if two_fc == True:
+            self.dropout = nn.Dropout(0.5)
+            self.relu1 = nn.ReLU(inplace=True)
             self.fcadd = nn.Linear(output_dim, n_classes, bias=False)
 
-        self.dropout = nn.Dropout(0.5)
-        self.relu1 = nn.ReLU(inplace=True)
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):

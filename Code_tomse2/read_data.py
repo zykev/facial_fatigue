@@ -302,6 +302,68 @@ def load_imgs_numpy(video_root, video_list, data_doubled=False, Nclass=10):
         # video_names.append(video_name)
         ind = np.arange(0,len(index),1)
     return imgs_first, index
+
+
+'''
+====================================================cam===================================================
+'''
+
+def load_imgs_total_frame_cam(video_root, video_name):
+    imgs_first_dict = {}
+    imgs_first = []
+    index = []
+
+    video_path = os.path.join(video_root, video_name[:video_name.rfind('.')])
+    img_lists = os.listdir(video_path)
+    img_lists.sort(key=lambda x: int(x.split('.')[0]))  # sort files by ascending
+    imgs_first_dict[video_name] = []
+    for frame in img_lists:
+        imgs_first_dict[video_name].append(
+            (os.path.join(video_path, frame)))
+    ###  return video frame index  #####
+    ed_list = sample_seg(imgs_first_dict[video_name])
+    for id, seg_list in enumerate(ed_list):
+        imgs_first.append(seg_list)
+        index.append(np.ones(len(seg_list)) * id)
+
+    ind = np.arange(0, len(index), 1)
+
+    return imgs_first, ind
+
+class LoadData_cam():
+    def __init__(self, video_root, video_list, transform=None, transformVideoAug=None):
+
+        self.video_root = video_root
+        self.video_list = video_list
+        self.transform = transform
+        self.transformVideoAug = transformVideoAug
+
+    def image_process(self):
+        imgs_dict, dict_index = load_imgs_total_frame_cam(self.video_root, self.video_list)
+        image_all = []
+        for i in range(len(imgs_dict)):
+            image_list = []
+            image_clips = imgs_dict[i]
+            for item in image_clips:
+
+                img = Image.open(item).convert("RGB")
+                image_list.append(img)
+
+            if self.transformVideoAug is not None:
+                image_list = self.transformVideoAug(image_list)
+
+            if self.transform is not None:
+                image_list = [self.transform(image) for image in image_list]
+
+            image_list = torch.stack(image_list, dim=0)
+            image_all.append(image_list)
+        image_all = torch.stack(image_all)
+
+        return image_all, imgs_dict
+
+
+
+
 if __name__ == "__main__":
     arg_rootTrain = r'F:\R_data\smallsample'
     arg_listTrain = r'../Data/DataS_Train.txt'
