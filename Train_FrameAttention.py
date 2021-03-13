@@ -28,8 +28,8 @@ import pdb
 parser = argparse.ArgumentParser(description='PyTorch CelebA Training')
 parser.add_argument('--epochs', default=500, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float,
-                    metavar='LR', help='initial learning rate (default: 1e-4)')
+parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float,
+                    metavar='LR', help='initial learning rate (default: 1e-5)')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum　(default: 0.9)')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
@@ -44,12 +44,12 @@ parser.add_argument('--is_pretreat', default=False, dest='is_pretreat',
                     help='pretreating when is traing (default: False')
 parser.add_argument('--accumulation_step', default=1, type=int, metavar='M',
                     help='accumulation_step')
-parser.add_argument('--first_channel', default=8, type=int,
-                    help='number of channel in first convolution layer in resnet')
+parser.add_argument('--first_channel', default=64, type=int,
+                    help='number of channel in first convolution layer in resnet (default: 64)')
 parser.add_argument('--non_local_pos', default=3, type=int,
                     help='the position to add non_local block')
-parser.add_argument('--batch_size', default=8, type=int,
-                    help='batch size')
+parser.add_argument('--batch_size', default=32, type=int,
+                    help='batch size (default: 32)')
 parser.add_argument('--data_time', default=1, type=int,
                     help='the time of auging data')
 
@@ -110,6 +110,7 @@ def main():
     print('non_local_pos', args.non_local_pos)
     print('batch size:', args.batch_size)
     print('data_time', data_time)
+    print('is_pretreat:', args.is_pretreat)
 
     # save model superparameter
     with open(os.path.join(new_folder, "hyperparam.txt"), "a+") as f:
@@ -120,8 +121,9 @@ def main():
         f.write('first channel' + ' ' + str(args.first_channel) + '\n')
         f.write('non local pos' + ' ' + str(args.non_local_pos) + '\n')
         f.write('batch size' + ' ' + str(args.batch_size) + '\n')
+        f.write('is pretreat' + ' ' + str(args.is_pretreat) + '\n')
 
-    dir_model = r"./model/epoch47_0.0653"
+    dir_model = r"./model/epoch51_69.0"
 
     ''' Load data '''
 
@@ -156,7 +158,7 @@ def main():
         return
 
     first_channel = args.first_channel
-    feature_dim = first_channel * 2
+    feature_dim = first_channel * 4
 
     ''' Load model '''
     MSEcriterion = nn.MSELoss()
@@ -243,11 +245,8 @@ def train(train_loader, model, criterion, optimizer, epoch, accumulation_step):
     num_of_data = 0
     end = time.time()
     score_list = []
-    # for batch_idx, (input_image, sample) in enumerate(train_loader):
     for batch_idx, (input_image, sample) in enumerate(train_loader):
         # measure data loading time
-        # print(len(sample))
-        # print(sample[0])
         data_time.update(time.time() - end)
         sample = sample[0]
         #emotion = torch.autograd.Variable(sample['emotion']).to(device)
@@ -311,7 +310,6 @@ def validate(val_loader, model):
     model.eval()
     with torch.no_grad():
         for batch_idx, (input_image, sample) in enumerate(val_loader):
-        # for batch_idx, (input_image, sample, index) in enumerate(val_loader):
             # measure data loading time
             data_time.update(time.time() - end)
             sample = sample[0]

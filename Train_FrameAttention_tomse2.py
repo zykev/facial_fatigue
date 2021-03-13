@@ -25,8 +25,8 @@ import pdb
 parser = argparse.ArgumentParser(description='PyTorch CelebA Training')
 parser.add_argument('--epochs', default=500, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float,
-                    metavar='LR', help='initial learning rate (default: 1e-4)')
+parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float,
+                    metavar='LR', help='initial learning rate (default: 1e-5)')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum　(default: 0.9)')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
@@ -45,7 +45,7 @@ parser.add_argument('--loss_alpha', default=0.1, type=float,
                     help='adjust loss for crossentrophy')
 parser.add_argument('--num_classes', default=10, type=int,
                     help='number of categorical classes')
-parser.add_argument('--first_channel', default=8, type=int,
+parser.add_argument('--first_channel', default=64, type=int,
                     help='number of channel in first convolution layer in resnet')
 parser.add_argument('--non_local_pos', default=3, type=int,
                     help='the position to add non_local block')
@@ -129,7 +129,7 @@ def load_model(dir_model):
     MSEcriterion = nn.MSELoss()
 
 
-    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=args.num_classes, feature_dim=128, at_type='nonLocal')
+    model = Model_Parts.FullModal_VisualFeatureAttention(num_class=1, feature_dim=512, at_type='nonLocal')
     model = Model_Parts.LoadParameter(model, dir_model)
 
     model1 = torch.nn.DataParallel(Model_Parts.FullModel_Loss(model, MSEcriterion))
@@ -163,6 +163,7 @@ def main():
     print('first_channel', args.first_channel)
     print('non_local_pos', args.non_local_pos)
     print('batch_size:', args.batch_size)
+    print('is_pretreat:', args.is_pretreat)
 
 
     # save model superparameter
@@ -176,8 +177,9 @@ def main():
         f.write('first channel' + ' ' + str(args.first_channel) + '\n')
         f.write('non local pos' + ' ' + str(args.non_local_pos) + '\n')
         f.write('batch size' + ' ' + str(args.batch_size) + '\n')
+        f.write('is pretreat' + ' ' + str(args.is_pretreat) + '\n')
 
-    dir_model = r"./model/epoch47_0.0653"
+    dir_model = r"./model/epoch51_69.0"
 
     ''' Load data '''
 
@@ -212,7 +214,7 @@ def main():
         return
 
     first_channel = args.first_channel
-    feature_dim = first_channel * 2
+    feature_dim = first_channel * 4
 
     ''' Load model '''
     criterion1 = nn.CrossEntropyLoss()

@@ -11,16 +11,26 @@ from Code_tomse2 import load_materials, resnet3D, resnet3DS, resnet2p1d
 
 # ------------------------------------------------- utilize tool ------------------------------------------------------
 def LoadParameter(_structure, _parameterDir):
+#     device = "cuda" if torch.cuda.is_available() else "cpu"
+#     checkpoint = torch.load(_parameterDir, map_location=torch.device(device))
+#     pretrained_state_dict = checkpoint['state_dict']
+#     model_state_dict = _structure.state_dict()
+#     for key in pretrained_state_dict:
+#         if key != 'module.visual_encoder.fc.weight' and key != 'module.visual_encoder.fcadd.weight':
+#             model_state_dict[key.replace('module.', '')] = pretrained_state_dict[key]
+#         else:
+#             model_state_dict['visual_encoder.fc.weight'] = pretrained_state_dict['module.visual_encoder.fc.weight']
+#             model_state_dict['liner.2.weight'] = pretrained_state_dict['module.visual_encoder.fcadd.weight']
+#
+#     _structure.load_state_dict(model_state_dict)
+#     return _structure
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     checkpoint = torch.load(_parameterDir, map_location=torch.device(device))
     pretrained_state_dict = checkpoint['state_dict']
     model_state_dict = _structure.state_dict()
     for key in pretrained_state_dict:
-        if key != 'module.visual_encoder.fc.weight' and key != 'module.visual_encoder.fcadd.weight':
-            model_state_dict[key.replace('module.', '')] = pretrained_state_dict[key]
-        else:
-            model_state_dict['visual_encoder.fc.weight'] = pretrained_state_dict['module.visual_encoder.fc.weight']
-            model_state_dict['liner.2.weight'] = pretrained_state_dict['module.visual_encoder.fcadd.weight']
+        model_state_dict[key.replace('module.model.', '')] = pretrained_state_dict[key]
 
     _structure.load_state_dict(model_state_dict)
     return _structure
@@ -79,7 +89,7 @@ class FullModal_VisualFeatureAttention(nn.Module):
         if non_local_pos != 0:
             non_local_state[non_local_pos - 1] = True
 
-        _structure = resnet3DS.generate_model(10, non_local_state=non_local_state, n_classes=num_class, output_dim=feature_dim,
+        _structure = resnet3DS.generate_model(18, non_local_state=non_local_state, n_classes=num_class, output_dim=feature_dim,
                                               two_fc=False, first_channel=first_channel)
 
         # _structure = resnet3D.resnet3D50(non_local=True, num_classes=1024)

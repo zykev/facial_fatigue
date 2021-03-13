@@ -79,7 +79,7 @@ class FullModal_VisualFeatureAttention(nn.Module):
 
         # embeding
         # _structure = resnet18(pretrained=True)
-        _structure = resnet3DS.generate_model(10, non_local_state=non_local_state, first_channel=first_channel, n_classes=feature_dim)
+        _structure = resnet3DS.generate_model(18, non_local_state=non_local_state, first_channel=first_channel, n_classes=feature_dim)
 
         # _structure = resnet3D.resnet3D50(non_local=True, num_classes=1024)
         self.visual_encoder = _structure

@@ -217,7 +217,7 @@ class FrameAttentionDataSet(data.Dataset):
         if self.data_time == 1:
             if self.transformVideoAug is not None:
                 image_list = self.transformVideoAug(image_list)
-            else:
+            elif self.transformVideoAug_com is not None:
                 image_list = self.transformVideoAug_com(image_list)
         else:
             if index % 2 == 0:

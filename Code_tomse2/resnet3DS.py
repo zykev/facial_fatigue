@@ -53,9 +53,9 @@ class BasicBlock(nn.Module):
 
         self.conv1 = conv3x3x3(in_planes, planes, stride)
         self.bn1 = nn.BatchNorm3d(planes)
-        self.relu = nn.ReLU(inplace=True)
-        # self.conv2 = conv3x3x3(planes, planes)
-        # self.bn2 = nn.BatchNorm3d(planes)
+        self.relu = nn.ReLU(inplace=False)
+        self.conv2 = conv3x3x3(planes, planes)
+        self.bn2 = nn.BatchNorm3d(planes)
         self.downsample = downsample
         self.stride = stride
 
@@ -64,10 +64,10 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        # out = self.relu(out)
+        out = self.relu(out)
 
-        # out = self.conv2(out)
-        # out = self.bn2(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -90,7 +90,7 @@ class Bottleneck(nn.Module):
         self.bn2 = nn.BatchNorm3d(planes)
         self.conv3 = conv1x1x1(planes, planes * self.expansion)
         self.bn3 = nn.BatchNorm3d(planes * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
 
@@ -148,7 +148,7 @@ class ResNet(nn.Module):
                                padding=(conv1_t_size // 2, 3, 3),
                                bias=False)
         self.bn1 = nn.BatchNorm3d(self.in_planes)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
         self.maxpool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, block_inplanes[0], layers[0],
                                        shortcut_type,
@@ -178,7 +178,7 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(block_inplanes[3] * block.expansion, output_dim, bias=False)
         if two_fc == True:
             self.dropout = nn.Dropout(0.5)
-            self.relu1 = nn.ReLU(inplace=True)
+            self.relu1 = nn.ReLU(inplace=False)
             self.fcadd = nn.Linear(output_dim, n_classes, bias=False)
 
 

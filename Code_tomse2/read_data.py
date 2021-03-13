@@ -51,19 +51,6 @@ def load_imgs_total_frame(video_root, video_list, data_doubled=False):
             ###  return video frame index  #####
             ed_list = sample_seg_full(imgs_first_dict[video_name])
             for seg_list in ed_list:
-                # if fatigue > 0.8:
-                #     imgs_first.append(seg_list)
-                #     index.append(n_indm)
-                #     n_indm += 1
-                #     imgs_first.append(seg_list)
-                #     index.append(n_indm)
-                #     n_indm += 1
-                #     imgs_first.append(seg_list)
-                #     index.append(n_indm)
-                #     n_indm += 1
-                #     imgs_first.append(seg_list)
-                #     index.append(n_indm)
-                #     n_indm += 1
                 if data_doubled == True:
                     imgs_first.append(seg_list)
                     index.append(n_ind)
