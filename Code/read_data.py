@@ -17,38 +17,23 @@ def load_imgs_total_frame(video_root, video_list, data_time=1):
     n_ind = 0
     video_names = []
     index = []
-    num_v = 0
     with open(video_list, 'r') as imf:
         imf = imf.readlines()
-        
+
         for id, line in enumerate(imf):
-            num_v += 1
-            #print('a')
-            
-            video_label = line.strip().split(',')
-            if len(video_label) < 2:
-                continue
+
+            video_label = line.strip().split()
 
             video_name, fatigue = video_label
             fatigue = (np.float32(fatigue) - 1) / 4.0
 
-            #video_label = line.strip().split()
-            #video_name, emotion, energy, fatigue, attention, motivate, Global_Status = video_label
-            #emotion = (np.float32(emotion) - 1) / 9.0
-            #energy = (np.float32(energy) - 1) / 99.
-            #fatigue = (np.float32(fatigue) - 1) / 4.0
-            #attention = (np.float32(attention) - 1) / 4.0
-            #motivate = (np.float32(motivate) - 1) / 4.0
-            #Global_Status = (np.float32(Global_Status) - 1) / 4.0
-
-
             if video_name.split('.')[-1] == 'mp4':
                 video_path = os.path.join(video_root, video_name.replace(".mp4", ""))
             elif video_name.split('.')[-1] == 'mov':
-                video_path = os.path.join(video_root, video_name.replace(".mov", "")) 
+                video_path = os.path.join(video_root, video_name.replace(".mov", ""))
             else:
                 video_path = os.path.join(video_root, video_name)
-            
+
             img_lists = os.listdir(video_path)
             img_lists.sort(key=lambda x: int(x.split('.')[0]))  # sort files by ascending
             imgs_first_dict[video_name] = []
@@ -67,7 +52,6 @@ def load_imgs_total_frame(video_root, video_list, data_time=1):
         # index = np.concatenate(index, axis=0)
         # video_names.append(video_name)
         ind = np.arange(0,len(index),1)
-    #print(num_v)
     return imgs_first, index
 
 

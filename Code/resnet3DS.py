@@ -1,18 +1,13 @@
 import math
 from functools import partial
 
-import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 
-sys.path.append(r'C:\Users\ASUS\Desktop\onlyfat_a3DS_class\Code_tomse2')
+from Code.non_local import NLBlockND
 
-try:
-    from Code.non_local import NLBlockND
-except ModuleNotFoundError:
-    from Code_tomse2.non_local import NLBlockND
 
 
 class InputChannelerror(RuntimeError):

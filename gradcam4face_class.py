@@ -5,9 +5,9 @@ import torch
 from torch.autograd import Function
 from torchvision import transforms
 from Code_tomse2 import Model_Parts, read_data
-from vidaug.augmentors import affine, crop
 import numpy as np
 from PIL import Image
+from vidaug import augment as aug
 
 "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6371279/"
 
@@ -24,14 +24,20 @@ class FeatureExtractor():
     def save_gradient(self, grad):
         self.gradients.append(grad)
 
-    def __call__(self, x):
+    def __call__(self, x, layer_name):
         outputs = []
         self.gradients = []
-        for name, module in self.model._modules.items():
-            x = module(x)
-            if name in self.target_layers:
-                x.register_hook(self.save_gradient)
-                outputs += [x]
+        if layer_name in ['layer1', 'layer2', 'layer3', 'layer4']:
+            for name, module in self.model._modules.items():
+                x = module(x)
+                if name in self.target_layers:
+                    x.register_hook(self.save_gradient)
+                    outputs += [x]
+        else:
+            x = self.model(x)
+            x.register_hook(self.save_gradient)
+            outputs += [x]
+
         return outputs, x
 
 
@@ -51,31 +57,23 @@ class ModelOutputs():
 
     def __call__(self, x):
         target_activations = []
-        c = 0
-        for mod in [self.model.visual_encoder, self.model]:
-            c += 1
-            if c == 1:
-                for name, module in mod._modules.items():
-                    if module == self.feature_module:
-                        target_activations, x = self.feature_extractor(x)
-                    elif "avgpool" in name.lower():
-                        x = module(x)
-                        x = x.view(x.size(0), -1)
-                    else:
-                        x = module(x)
-            else:
-                c_module = 0
-                for name, module in mod._modules.items():
-                    c_module += 1
-                    if c_module == 2:
-                        if module == self.feature_module:
-                            target_activations, x = self.feature_extractor(x)
-                        elif "avgpool" in name.lower():
-                            x = module(x)
+        for mod in [self.model]:
+            for name, module in mod._modules.items():
+                if name == 'visual_encoder':
+                    for sub_name, sub_module in module._modules.items():
+                        if sub_module == self.feature_module:
+                            target_activations, x = self.feature_extractor(x, sub_name)
+                        elif "avgpool" in sub_name.lower():
+                            x = sub_module(x)
                             x = x.view(x.size(0), -1)
                         else:
-                            x = module(x)
-                            x = torch.nn.functional.log_softmax(x, dim=1)
+                            x = sub_module(x)
+                else:
+                    if module == self.feature_module:
+                        target_activations, x = self.feature_extractor(x, name)
+                    else:
+                        x = module(x)
+                        x = torch.nn.functional.log_softmax(x, dim=1)
 
         return target_activations, x
 
@@ -277,7 +275,7 @@ def LoadPredictDataset(root_train, arg_train_list):
     pre_loader = read_data.LoadData_cam(
         video_root=root_train,
         video_list=arg_train_list,
-        transformVideoAug=transforms.Compose([affine.Resize([256, 256]), crop.CenterCrop(224)]),
+        transformVideoAug=transforms.Compose([aug.Resize([224, 224])]),
         transform=transforms.Compose([transforms.ToTensor(),
                                       transforms.Normalize(mean=(0.5, 0.5, 0.5),
                                                            std=(0.5, 0.5, 0.5))])

@@ -32,8 +32,8 @@ parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float,
                     metavar='LR', help='initial learning rate (default: 1e-5)')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum　(default: 0.9)')
-parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
+parser.add_argument('--weight-decay', '--wd', default=0.1, type=float,
+                    metavar='W', help='weight decay (default: 0.1)')
 parser.add_argument('--pf', '--print-freq', default=200, type=int,
                     metavar='N', help='print frequency (default: 200)')
 parser.add_argument('-e', '--evaluate', default=False, dest='evaluate', action='store_true',
@@ -44,6 +44,7 @@ parser.add_argument('--is_pretreat', default=False, dest='is_pretreat',
                     help='pretreating when is traing (default: False')
 parser.add_argument('--accumulation_step', default=1, type=int, metavar='M',
                     help='accumulation_step')
+
 parser.add_argument('--first_channel', default=64, type=int,
                     help='number of channel in first convolution layer in resnet (default: 64)')
 parser.add_argument('--non_local_pos', default=3, type=int,
@@ -53,10 +54,16 @@ parser.add_argument('--batch_size', default=32, type=int,
 parser.add_argument('--data_time', default=1, type=int,
                     help='the time of auging data')
 
+parser.add_argument('--arg_rootTrain', default=None, type=str,
+                    help='the path of train sample ')
+parser.add_argument('--arg_rootEval', default=None, type=str,
+                    help='the path of eval sample ')
+
 
 best_prec1 = 10
 args = parser.parse_args()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 '''MyNote '''
 
 
@@ -69,6 +76,25 @@ class Abs(nn.Module):
 
     def forward(self,input,target):
         return abs_double(input, target)
+
+class CCCLoss(nn.Module):
+    def __init__(self):
+        super(CCCLoss, self).__init__()
+
+    def forward(self, x, y):
+        # the target y is continuous value (BS, )
+        # the input x is continuous value (BS, )
+        y = y.view(-1)
+        x = x.view(-1)
+        vx = x - torch.mean(x)
+        vy = y - torch.mean(y)
+        rho = torch.sum(vx * vy) / (torch.sqrt(torch.sum(torch.pow(vx, 2))) * torch.sqrt(torch.sum(torch.pow(vy, 2))))
+        x_m = torch.mean(x)
+        y_m = torch.mean(y)
+        x_s = torch.std(x)
+        y_s = torch.std(y)
+        ccc = 2*rho*x_s*y_s/(torch.pow(x_s, 2) + torch.pow(y_s, 2) + torch.pow(x_m - y_m, 2))
+        return 1-ccc
 
 
 def load_model(dir_model):
@@ -84,7 +110,7 @@ def load_model(dir_model):
 
 def get_path(lr, wd):
     save_name = datetime.now().strftime('%m-%d_%H-%M')
-    folder = 'lr'+str(lr)+'wd'+str(wd) + '_' + save_name
+    folder = './model/' + save_name + '_' + 'lr'+str(lr)+'wd'+str(wd)
     if os.path.exists(folder):
         print("There is the folder")
         folder = folder + '_c'
@@ -127,15 +153,17 @@ def main():
 
     ''' Load data '''
 
-    arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375'
-    arg_listTrain = r'./Data/376Data-Train.txt'
-    arg_rooteval = r'/home/biai/BIAI/mood/Data-S375'
-    arg_listeval = r'./Data/376Data-Eval.txt'
+    if args.arg_rootTrain == None:
+        arg_listTrain = r'./Data/label-train.txt'
+    else:
+        arg_listTrain = args.arg_rootTrain
+    arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375-align'
 
-    # arg_rootTrain = r'/home/xiaotao/Desktop/Data-S375'
-    # arg_listTrain = r'./Data/376Data-Train.txt'
-    # arg_rooteval = r'/home/xiaotao/Desktop/Data-S375'
-    # arg_listeval = r'./Data/376Data-Eval.txt'
+    if args.arg_rootEval == None:
+        arg_listeval = r'./Data/label-eval.txt'
+    else:
+        arg_listeval = args.arg_rootEval
+    arg_rooteval = r'/home/biai/BIAI/mood/Data-S375-align'
 
     train_loader, val_loader = load_materials.LoadVideoAttention(arg_rootTrain, arg_listTrain, arg_rooteval,
                                                                       arg_listeval, data_time=data_time, batch_size=args.batch_size)
@@ -162,6 +190,7 @@ def main():
 
     ''' Load model '''
     MSEcriterion = nn.MSELoss()
+    CCCcriterion = CCCLoss()
     model = Model_Parts.FullModal_VisualFeatureAttention(num_class=1, feature_dim=feature_dim, non_local_pos=args.non_local_pos,
                                                          first_channel=first_channel)
     if args.is_pretreat:
@@ -170,6 +199,7 @@ def main():
        
         
     model = torch.nn.DataParallel(Model_Parts.FullModel_Loss(model, MSEcriterion))
+    model = torch.nn.DataParallel(Model_Parts.FullModel_Loss(model, CCCcriterion))
 
     ''' Loss & Optimizer '''
     criterion = nn.CrossEntropyLoss().to(device)
@@ -197,7 +227,7 @@ def main():
         mseloss = train(train_loader, model, criterion, optimizer, epoch, accumulation_step)
         print('...... Beginning Test epoch: {} ......'.format(epoch))
         if args.is_test :
-            mseloss1 = validate(val_loader, model) #, criterion)
+            mseloss1 = validate(val_loader, model)
         else:
             mseloss1 = mseloss
         is_better = mseloss1 < best_prec1
@@ -220,7 +250,7 @@ def main():
         else:
             print('Model too bad & not save')
             
-        with open(os.path.join(new_folder, "result.txt"), "a+") as f:
+        with open(os.path.join(new_folder, "a.txt"), "a+") as f:
             f.write(str(mseloss)+" "+str(mseloss1))
             f.write("\n")
             f.flush()
@@ -246,6 +276,10 @@ def train(train_loader, model, criterion, optimizer, epoch, accumulation_step):
     end = time.time()
     score_list = []
     for batch_idx, (input_image, sample) in enumerate(train_loader):
+
+        if hasattr(torch.cuda, 'empty_cache'):
+            torch.cuda.empty_cache()
+
         # measure data loading time
         data_time.update(time.time() - end)
         sample = sample[0]
@@ -337,26 +371,6 @@ def validate(val_loader, model):
                     data_time=data_time, loss=losses))
 
 
-        # for i, (input_image, sample, index) in enumerate(val_loader):
-        #     # compute output
-        #     emotion = torch.autograd.Variable(sample['emotion']).to(device)
-        #     energy = torch.autograd.Variable(sample['energy']).to(device)
-        #     fatigue = torch.autograd.Variable(sample['fatigue']).to(device)
-        #     attention = torch.autograd.Variable(sample['attention']).to(device)
-        #     motivate = torch.autograd.Variable(sample['motivate']).to(device)
-        #     Global_Status = torch.autograd.Variable(sample['Global_Status']).to(device)
-        #     input_var = torch.autograd.Variable(input_image).to(device)
-        #
-        #     ''' model & full_model'''
-        #     loss, compact_los, frame_outputs, groud_truth = model(input_var, emotion, energy, fatigue, attention,
-        #                                                           motivate, Global_Status)
-        #     loss = loss.sum()
-        #     score_list.append(compact_los)
-        #
-        #     if i % args.pf == 0:
-        #         print('Test: [{0}/{1}]\t'.
-        #               format(i, len(val_loader))
-        #               )
 
     ''' Compute Loss '''
     sum_loss = torch.stack(score_list, dim=0)

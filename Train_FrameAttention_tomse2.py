@@ -37,7 +37,7 @@ parser.add_argument('-e', '--evaluate', default=False, dest='evaluate', action='
                     help='evaluate model on validation set')
 parser.add_argument('--is_test', default=True, dest='is_test',
                     help='testing when is traing (default: True)')
-parser.add_argument('--is_pretreat', default=False, dest='is_pretreat',
+parser.add_argument('--is_pretreat', default=True, dest='is_pretreat',
                     help='pretreating when is traing (default: False)')
 parser.add_argument('--accumulation_step', default=1, type=int, metavar='M',
                     help='accumulation_step')
@@ -49,8 +49,13 @@ parser.add_argument('--first_channel', default=64, type=int,
                     help='number of channel in first convolution layer in resnet')
 parser.add_argument('--non_local_pos', default=3, type=int,
                     help='the position to add non_local block')
-parser.add_argument('--batch_size', default=8, type=int,
+parser.add_argument('--batch_size', default=16, type=int,
                     help='batch size')
+
+parser.add_argument('--arg_rootTrain', default=None, type=str,
+                    help='the path of train sample ')
+parser.add_argument('--arg_rootEval', default=None, type=str,
+                    help='the path of eval sample ')
 
 
 best_prec_total1 = 10
@@ -82,15 +87,15 @@ class CrossEntropyLoss_label_smooth(nn.Module):
 
         N = targets.size(0)
         # torch.Size([8, 10])
-        # 初始化一个矩阵, 里面的值都是epsilon / (num_classes - 1)
+
         smoothed_labels = torch.full(size=(N, self.num_classes), fill_value=self.smoothing / (self.num_classes - 1)).to(device)
 
         targets = targets.data
-        # 为矩阵中的每一行的某个index的位置赋值为1 - epsilon
+
         smoothed_labels.scatter_(dim=1, index=targets.unsqueeze(dim=1), value=1 - self.smoothing)
-        # 调用torch的log_softmax
+
         log_prob = nn.functional.log_softmax(outputs, dim=1)
-        # 用之前得到的smoothed_labels来调整log_prob中每个值
+      
         loss = - torch.sum(log_prob * smoothed_labels) / N
 
         return loss
@@ -137,7 +142,7 @@ def load_model(dir_model):
 
 def get_path(lr, wd):
     save_name = datetime.now().strftime('%m-%d_%H-%M')
-    folder = 'lr'+str(lr)+'wd'+str(wd) + '_' + save_name
+    folder = './model/' + save_name + '_' + 'lr'+str(lr)+'wd'+str(wd)
     if os.path.exists(folder):
         print("There is the folder")
         folder = folder + '_c'
@@ -183,16 +188,30 @@ def main():
 
     ''' Load data '''
 
-    arg_rootTrain = r'/home/xiaotao/Desktop/Data-S375-cut224'
-    arg_listTrain = r'./Data/376Data-Train.txt'
-    arg_rooteval = r'/home/xiaotao/Desktop/Data-S375-cut224'
-    arg_listeval = r'./Data/376Data-Eval.txt'
+
+    if args.arg_rootTrain == None:
+        arg_listTrain = r'./Data/375Data-Train.txt'
+    else:
+        arg_listTrain = args.arg_rootTrain
+    arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375-align' 
+    
+    if args.arg_rootEval == None:
+        arg_listeval = r'./Data/375Data-Eval.txt'
+    else:
+        arg_listeval = args.arg_rootEval
+    arg_rooteval = r'/home/biai/BIAI/mood/Data-S375-align' 
+    
+    #arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375-align'
+    #arg_listTrain = r'./Data/375Data-Train.txt'
+    #arg_rooteval = r'/home/biai/BIAI/mood/Data-S375-align'
+    #arg_listeval = r'./Data/375Data-Eval.txt'
 
     # arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375-cut224/'
     # arg_listTrain = r'./Data/376Data-Train.txt'
     # arg_rooteval = r'/home/biai/BIAI/mood/Data-S375-cut224/'
     # arg_listeval = r'./Data/376Data-Eval.txt'
 
+    print(arg_listTrain,arg_listeval)
     train_loader, val_loader = load_materials.LoadVideoAttention(arg_rootTrain, arg_listTrain, arg_rooteval,
                                                                       arg_listeval, batch_size=args.batch_size)
     ''' Eval '''

@@ -23,7 +23,7 @@ def load_imgs_total_frame(video_root, video_list, data_doubled=False):
 
         for id, line in enumerate(imf):
 
-            video_label = line.strip().split(',')
+            video_label = line.strip().split(' ')
 
             # video_name, emotion, energy, fatigue, attention, motivate, Global_Status = video_label
             video_name, fatigue = video_label
@@ -352,10 +352,10 @@ class LoadData_cam():
 
 
 if __name__ == "__main__":
-    arg_rootTrain = r'F:\R_data\smallsample'
-    arg_listTrain = r'../Data/DataS_Train.txt'
-    arg_rooteval = r'F:\R_data\smallsample'
-    arg_listeval = r'../Data/DataS_Eval.txt'
+    arg_rootTrain = r'/home/biai/BIAI/mood/Data-S375-align'
+    arg_listTrain = r'./Data/375Data-Train.txt'
+    arg_rooteval = r'/home/biai/BIAI/mood/Data-S375-align'
+    arg_listeval = r'./Data/375Data-Eval.txt'
     # sample_seg()
     a, b = load_imgs_total_frame(arg_rootTrain, arg_listTrain)
     result_train = pd.DataFrame(columns=['video', 'label'])
@@ -363,7 +363,11 @@ if __name__ == "__main__":
         vid_name = a[i][0][0].split('/')
         result_train = result_train.append(pd.DataFrame({'video': [vid_name[-2]], 'label': [a[i][0][1]]}),
                                            ignore_index=True)
-    result_train.to_csv("/home/biai/BIAI/mood/onlyfat_selfa3DS_class_tomse2/Data/train_clips.csv", index=False)
+
+    train_agg = pd.pivot_table(result_train, index='video', aggfunc=['mean', 'count'])
+    train_agg.columns = ['label', 'count']
+    train_agg = train_agg.reset_index()
+    train_agg.to_csv("./Data/train_clips.csv", index=False)
 
     c, d = load_imgs_total_frame(arg_rooteval, arg_listeval)
 
@@ -372,7 +376,11 @@ if __name__ == "__main__":
         vid_name = c[i][0][0].split('/')
         result_eval = result_eval.append(pd.DataFrame({'video': [vid_name[-2]], 'label': [c[i][0][1]]}),
                                          ignore_index=True)
-    result_eval.to_csv("/home/biai/BIAI/mood/onlyfat_selfa3DS_class_tomse2/Data/eval_clips.csv", index=False)
+
+    eval_agg = pd.pivot_table(result_eval, index='video', aggfunc=['mean', 'count'])
+    eval_agg.columns = ['label', 'count']
+    eval_agg = eval_agg.reset_index()
+    eval_agg.to_csv("./Data/eval_clips.csv", index=False)
 
     pass
     # pass

@@ -6,31 +6,18 @@ import numpy as np
 import pdb
 import torch.nn as nn
 import torchvision.models as models
-from Code_tomse2 import load_materials, resnet3D, resnet3DS, resnet2p1d
-
+from Code_tomse2 import resnet3DS
+import sys
 
 # ------------------------------------------------- utilize tool ------------------------------------------------------
 def LoadParameter(_structure, _parameterDir):
-#     device = "cuda" if torch.cuda.is_available() else "cpu"
-#     checkpoint = torch.load(_parameterDir, map_location=torch.device(device))
-#     pretrained_state_dict = checkpoint['state_dict']
-#     model_state_dict = _structure.state_dict()
-#     for key in pretrained_state_dict:
-#         if key != 'module.visual_encoder.fc.weight' and key != 'module.visual_encoder.fcadd.weight':
-#             model_state_dict[key.replace('module.', '')] = pretrained_state_dict[key]
-#         else:
-#             model_state_dict['visual_encoder.fc.weight'] = pretrained_state_dict['module.visual_encoder.fc.weight']
-#             model_state_dict['liner.2.weight'] = pretrained_state_dict['module.visual_encoder.fcadd.weight']
-#
-#     _structure.load_state_dict(model_state_dict)
-#     return _structure
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
     checkpoint = torch.load(_parameterDir, map_location=torch.device(device))
     pretrained_state_dict = checkpoint['state_dict']
     model_state_dict = _structure.state_dict()
     for key in pretrained_state_dict:
-        model_state_dict[key.replace('module.model.', '')] = pretrained_state_dict[key]
+        if key not in ["liner.weight", "liner.bias"]:
+            model_state_dict[key.replace('module.model.', '')] = pretrained_state_dict[key]
 
     _structure.load_state_dict(model_state_dict)
     return _structure
@@ -80,7 +67,7 @@ class VectorsAttention(nn.Module):
 
 
 class FullModal_VisualFeatureAttention(nn.Module):
-    def __init__(self, num_class=10, feature_dim=256, non_local_pos=3, first_channel=8):
+    def __init__(self, num_class=10, feature_dim=256, non_local_pos=3, first_channel=64):
         super(FullModal_VisualFeatureAttention, self).__init__()
 
         # non_local block position
@@ -94,7 +81,7 @@ class FullModal_VisualFeatureAttention(nn.Module):
 
         # _structure = resnet3D.resnet3D50(non_local=True, num_classes=1024)
         self.visual_encoder = _structure
-        self.liner = nn.Sequential(nn.ReLU(inplace=False), nn.Dropout(0.6), nn.Linear(feature_dim, num_class, bias=False))
+        self.liner = nn.Sequential(nn.ReLU(inplace=False), nn.Dropout(0.6), nn.Linear(feature_dim, num_class))
         # self.visual_encoder
         # _parameterDir = '_88.65.pth.tar'
         # self.visual_encoder = LoadParameter(_structure, _parameterDir)

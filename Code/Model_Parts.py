@@ -6,7 +6,7 @@ import numpy as np
 import pdb
 import torch.nn as nn
 import torchvision.models as models
-from Code import load_materials, resnet3D, resnet3DS
+from Code import resnet3DS
 
 
 # ------------------------------------------------- utilize tool ------------------------------------------------------
@@ -66,7 +66,7 @@ class VectorsAttention(nn.Module):
 
 
 class FullModal_VisualFeatureAttention(nn.Module):
-    def __init__(self, num_class=9, feature_dim=-1, non_local_pos=3, first_channel=8):
+    def __init__(self, num_class=9, feature_dim=-1, non_local_pos=3, first_channel=64):
         super(FullModal_VisualFeatureAttention, self).__init__()
 
         self.liner = nn.Linear(feature_dim, num_class)

@@ -64,27 +64,23 @@ def LoadFrameAttention(root_train, arg_train_list, root_eval, arg_test_list):
 
     return train_loader, val_loader
 
-def random_transformVideoAug():
+def random_transformVideoAug_more():
 
     sometimes = lambda aug_prob: aug.Sometimes(0.5, aug_prob)  # Used to apply augmentor with 50% probability
 
-    sub1 = transforms.Compose([aug.Resize([112, 112]),
-                               sometimes(aug.FracTranslate()),
+    sub1 = transforms.Compose([
                                sometimes(aug.HorizontalFlip()),
-                               sometimes(aug.GaussianBlur(2)),
+                               sometimes(aug.GaussianBlur([0.1, 0.6])),
                                sometimes(aug.Add(-50, 20)),
-                               sometimes(aug.Pepper(400)),
-                               sometimes(aug.EnhanceColor(2, 'color'))
-                             ])
+                               sometimes(aug.EnhanceColor([0.8, 1.2], 'color'))
+                               ])
 
-    sub2 = transforms.Compose([aug.Resize([112, 112]),
-                               sometimes(aug.FracTranslate()),
+    sub2 = transforms.Compose([
                                sometimes(aug.HorizontalFlip()),
-                               sometimes(aug.GaussianBlur(2)),
+                               sometimes(aug.GaussianBlur([0.1, 0.6])),
                                sometimes(aug.Add(30, 20)),
-                               sometimes(aug.Salt(400)),
-                               sometimes(aug.EnhanceColor(2, 'contrast'))
-                             ])
+                               sometimes(aug.EnhanceColor([0.8, 1.2], 'contrast'))
+                               ])
 
 
     sub = [sub1,sub2]
@@ -92,6 +88,16 @@ def random_transformVideoAug():
     tansf = transforms.RandomChoice(sub)
     return tansf
 
+def random_transformVideoAug_fixedsize():
+
+    sub3 = transforms.Compose([aug.Resize([112, 112])])
+    sub4 = transforms.Compose([aug.Resize([112, 112]), aug.HorizontalFlip()])
+    sub5 = transforms.Compose([aug.Resize([112, 112]), aug.Add(-50, 20)])
+    sub6 = transforms.Compose([aug.Resize([112, 112]), aug.Add(30, 20)])
+    sub = [sub4, sub5, sub6, sub3]
+    tansf = transforms.RandomChoice(sub)
+
+    return tansf
 
 
 
@@ -100,7 +106,7 @@ def LoadVideoAttention(root_train, arg_train_list, root_eval, arg_test_list, bat
     train_dataset = read_data.FrameAttentionDataSet(
         video_root=root_train,
         video_list=arg_train_list,
-        transformVideoAug=random_transformVideoAug(),
+        transformVideoAug=random_transformVideoAug_more(),
         transform=transforms.Compose([transforms.ToTensor(),
                                       transforms.Normalize(mean=(0.5, 0.5, 0.5),
                                                            std=(0.5, 0.5, 0.5))]),

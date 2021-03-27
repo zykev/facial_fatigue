@@ -535,7 +535,10 @@ class GaussianBlur(object):
     """
 
     def __init__(self, sigma):
-        self.sigma = sigma
+        if isinstance(sigma, list) and len(sigma) == 2:
+            self.sigma = random.uniform(sigma[0], sigma[1])
+        else:
+            self.sigma = sigma
 
     def __call__(self, clip):
 
@@ -936,12 +939,16 @@ class ConvertGray(object):
 class EnhanceColor(object):
 
     def __init__(self, param, mode):
-        if mode not in ['color','contrast']:
+        if mode not in ['color', 'contrast']:
             raise ValueError("Mode must be in 'color' or 'contrast'")
-        self.param = param
+        if isinstance(param, list) and len(param) == 2:
+            self.param = random.uniform(param[0], param[1])
+        else:
+            self.param = param
         self.mode = mode
     def __call__(self, clip):
         enh_imgs = []
+
         for img in clip:
             if self.mode == 'color':
                 enh = ImageEnhance.Color(img)
@@ -976,6 +983,7 @@ class Add(object):
             clip = [np.asarray(img) for img in clip]
 
         self.value = np.random.randint(self.value, self.value + self.step)
+
         data_final = []
         for i in range(len(clip)):
             image = clip[i].astype(np.int32)

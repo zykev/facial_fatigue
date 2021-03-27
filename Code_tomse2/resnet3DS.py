@@ -175,7 +175,7 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
         # self.avgpool = nn.AvgPool3d(kernel_size=(4, 7, 7))
         #self.fc = nn.Linear(block_inplanes[3] * block.expansion, n_classes)
-        self.fc = nn.Linear(block_inplanes[3] * block.expansion, output_dim, bias=False)
+        self.fc = nn.Linear(block_inplanes[3] * block.expansion, output_dim)
         if two_fc == True:
             self.dropout = nn.Dropout(0.5)
             self.relu1 = nn.ReLU(inplace=False)
@@ -190,10 +190,6 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm3d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-                
-            elif isinstance(m, (nn.Linear)):
-                nn.init.xavier_normal_(m.weight)
-                #nn.init.constant_(m.bias, 0)
 
     def _downsample_basic_block(self, x, planes, stride):
         out = F.avg_pool3d(x, kernel_size=1, stride=stride)
