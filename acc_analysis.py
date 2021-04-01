@@ -29,6 +29,15 @@ def get_args():
 
     return args
 
+def get_savepath(save_dir, model_dir):
+    save_path = os.path.join(save_dir, model_dir.split('/')[2], model_dir.split('/')[4])
+    if os.path.exists(save_path):
+        pass
+    else:
+        os.makedirs(save_path)
+
+    return save_path
+
 # load model
 
 def LoadParameter(_structure, _parameterDir):
@@ -172,7 +181,7 @@ def predict(data_id, val_loader, model, criterion1, criterion2, loss_alpha, summ
             sample = sample.to(device)
             sample_catego = sample_catego.to(device)
 
-            input_var = torch.autograd.Variable(input_image.squeeze(0)).permute((0, 2, 1, 3, 4))
+            input_var = torch.autograd.Variable(input_image).permute((0, 2, 1, 3, 4))
             input_var = input_var.to(device)
 
             outputs = model(input_var)
@@ -290,8 +299,9 @@ class SummaryStatistics(object):
 
 
 args = get_args()
-# dir_model = "./model/03-22_12-11_lr0.001wd0.0001/model/epoch33_loss_1.6888_acc_0.789"
-model = Model_Parts.FullModal_VisualFeatureAttention(num_class=2, feature_dim=256, non_local_pos=3,
+pred_save_path = get_savepath(args.save_dir, args.model_dir)
+
+model = Model_Parts.FullModal_VisualFeatureAttention(num_class=args.num_classes, feature_dim=256, non_local_pos=3,
                                                      first_channel=64)
 
 model = LoadParameter(model, args.model_dir)
@@ -314,7 +324,7 @@ for data_id, (imgs_dict, video_name) in enumerate(zip(imgs_first, video_names)):
 
     avg_labels = 1 if len(pred[pred == 1]) > len(pred) - len(pred[pred == 1]) else 0
     avg_mse_labels = mse_results.mean().cpu().numpy()
-    with open(os.path.join(args.save_dir, "prediction.txt"), "a+") as f:
+    with open(os.path.join(pred_save_path, "prediction.txt"), "a+") as f:
         f.write(video_name + ' ' + str(totalloss) + ' ' + str(acc) + ' ' +
                 str(avg_mse_labels) + ' ' + str(con_labels[0].cpu().numpy()) + ' ' +
                 str(avg_labels) + ' ' + str(labels[0].cpu().numpy()) + '\n')
@@ -349,12 +359,12 @@ tpr["avg"] = mean_tpr
 roc_auc["avg"] = metrics.auc(fpr["avg"], tpr["avg"])
 
 result_summary['roc_auc'] = roc_auc
-with open(os.path.join(args.save_dir, 'pred_summary.txt'), 'w') as handle:
+with open(os.path.join(pred_save_path, 'pred_summary.txt'), 'w') as handle:
     handle.write(str(result_summary))
 
 for key in fpr.keys():
     roc_data = np.vstack((fpr[key], tpr[key])).T
-    np.savetxt(os.path.join(args.save_dir, 'roc_data_class{}.txt'.format(key)), roc_data, delimiter=' ')
+    np.savetxt(os.path.join(pred_save_path, 'roc_data_class{}.txt'.format(key)), roc_data, delimiter=' ')
 
 
 plt.clf()
@@ -371,5 +381,5 @@ plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.title('Receiver Operating Characteristic Curve')
 plt.legend(loc="lower right")
-plt.savefig(os.path.join(args.save_dir, 'roc_curve.jpg'))
+plt.savefig(os.path.join(pred_save_path, 'roc_curve.jpg'))
 # plt.show()
