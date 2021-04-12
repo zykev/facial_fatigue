@@ -1,48 +1,12 @@
 # coding=utf-8
 
 from __future__ import print_function
-import torch
 import torch.utils.data
 import torchvision.transforms as transforms
 import torch
-from Code import DebinMeng_train, read_data
+from Code import read_data
 from vidaug import augment as aug
 
-
-def LoadAFEW(root_train, list_train, batchsize_train, root_eval, list_eval, batchsize_eval):
-    train_dataset = DebinMeng_train.BIEMSEEAIVideoDataset(
-        video_root=root_train,
-        video_list=list_train,
-        transform=transforms.Compose([transforms.Resize(240), transforms.RandomCrop(224),
-                                      transforms.RandomRotation(2),
-                                      transforms.RandomHorizontalFlip(),
-                                      transforms.RandomAffine(3),
-                                      transforms.ToTensor(),
-                                      transforms.Normalize(mean=(0.5, 0.5, 0.5),
-                                                           std=(0.5, 0.5, 0.5))
-                                      ])
-    )
-
-    val_dataset = DebinMeng_train.BIEMSEEAIVideoDataset(
-        video_root=root_eval,
-        video_list=list_eval,
-        transform=transforms.Compose([transforms.Resize(224),
-                                      transforms.ToTensor(),
-                                      transforms.Normalize(mean=(0.5, 0.5, 0.5),
-                                                           std=(0.5, 0.5, 0.5))
-                                      ]))
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batchsize_train, shuffle=True,
-        num_workers=16, pin_memory=True, drop_last=True)
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=batchsize_eval, shuffle=False,
-        num_workers=16, pin_memory=True)
-
-    return train_loader, val_loader
 
 
 def LoadParameter(_structure, _parameterDir):
@@ -59,44 +23,6 @@ def LoadParameter(_structure, _parameterDir):
 
     _structure.load_state_dict(model_state_dict)
     return _structure
-
-
-def LoadFrameAttention(root_train, arg_train_list, root_eval, arg_test_list):
-    train_dataset = DebinMeng_train.FrameAttentionDataSet(
-        video_root=root_train,
-        video_list=arg_train_list,
-        transform=transforms.Compose([transforms.Resize(240), transforms.RandomCrop(224),
-                                      # transforms.ColorJitter(0.03,0.03,0.03,0.03),
-                                      transforms.RandomRotation(2),
-                                      transforms.RandomHorizontalFlip(),
-                                      transforms.RandomAffine(3),
-                                      transforms.ToTensor(),
-                                      transforms.Normalize(mean=(0.5, 0.5, 0.5),
-                                                           std=(0.5, 0.5, 0.5))
-                                      ]),
-
-        sample_rate=5
-    )
-    val_dataset = DebinMeng_train.BIEMSEEAIVideoDataset(
-        video_root=root_eval,
-        video_list=arg_test_list,
-        transform=transforms.Compose([transforms.Resize(224),
-                                      transforms.ToTensor(),
-                                      transforms.Normalize(mean=(0.5, 0.5, 0.5),
-                                                           std=(0.5, 0.5, 0.5))
-                                      ]))
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=1, shuffle=True,
-        num_workers=0, pin_memory=True, drop_last=True)
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=1, shuffle=False,
-        num_workers=0, pin_memory=True)
-
-    return train_loader, val_loader
 
 
 def random_transformVideoAug_more():

@@ -1,13 +1,6 @@
 import torch.nn as nn
-import math
-import torch.nn.functional as F
-import torch
-import numpy as np
-import pdb
-import torch.nn as nn
-import torchvision.models as models
 from Code_tomse2 import resnet3DS
-import sys
+
 
 # ------------------------------------------------- utilize tool ------------------------------------------------------
 def LoadParameter(_structure, _parameterDir):
@@ -79,7 +72,6 @@ class FullModal_VisualFeatureAttention(nn.Module):
         _structure = resnet3DS.generate_model(18, non_local_state=non_local_state, n_classes=num_class, output_dim=feature_dim,
                                               two_fc=False, first_channel=first_channel)
 
-        # _structure = resnet3D.resnet3D50(non_local=True, num_classes=1024)
         self.visual_encoder = _structure
         self.liner = nn.Sequential(nn.ReLU(inplace=False), nn.Dropout(0.6), nn.Linear(feature_dim, num_class))
         # self.visual_encoder
@@ -141,7 +133,6 @@ class FullModel_Loss(nn.Module):
 import torch
 import torch.nn as nn
 
-# from .utils import load_state_dict_from_url
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',

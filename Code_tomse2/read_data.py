@@ -1,11 +1,8 @@
-import numpy as np
 import torch.utils.data as data
 import os
 from PIL import Image
 import numpy as np
 import torch
-import cv2
-import pdb
 import random
 import pandas as pd
 
@@ -63,9 +60,6 @@ def load_imgs_total_frame(video_root, video_list, data_doubled=False):
                     index.append(n_ind)
                     n_ind += 1
 
-        # index = np.concatenate(index, axis=0)
-        # video_names.append(video_name)
-        #ind = np.arange(0,len(index),1)
     return imgs_first, index
 
 def sample_seg_full(orig_list, seg_num=32):
@@ -90,8 +84,6 @@ def sample_seg(orig_list, seg_num=100, seg_num2=64):
         elif len(orig_list) < seg_num2:
             m_list.append(orig_list)
             for rand_s in m_list:
-                # rand_list = random.sample(rand_s, 32)
-                # ed_list.append(rand_list)
                 rand_num = random.sample(range(len(rand_s)), 32)
                 rand_num.sort()
                 ed_list.append([rand_s[i] for i in rand_num])
@@ -101,8 +93,6 @@ def sample_seg(orig_list, seg_num=100, seg_num2=64):
                 rand_n = np.random.randint(len(seg) - seg_num2 + 1, size=1)
                 m_list.append(seg[int(rand_n):int(rand_n) + seg_num2])
             for rand_s in m_list:
-                # rand_list = random.sample(rand_s, 32)
-                # ed_list.append(rand_list)
                 rand_num = random.sample(range(len(rand_s)), 32)
                 rand_num.sort()
                 ed_list.append([rand_s[i] for i in rand_num])
@@ -115,8 +105,6 @@ def sample_seg(orig_list, seg_num=100, seg_num2=64):
         rand_n = np.random.randint(seg_num - seg_num2 + 1, size=1)
         m_list.append(seg[int(rand_n):int(rand_n) + seg_num2])
     for rand_s in m_list:
-        # rand_list = random.sample(rand_s, 32)
-        # ed_list.append(rand_list)
         rand_num = random.sample(range(64), 32)
         rand_num.sort()
         ed_list.append([rand_s[i] for i in rand_num])
@@ -136,8 +124,6 @@ def sample_seg_impro(orig_list, seg_num=100, seg_num2=64, seg_num3=32, dataaug=2
         elif len(orig_list) < seg_num2:
             m_list.append(orig_list)
             for rand_s in m_list:
-                # rand_list = random.sample(rand_s, 32)
-                # ed_list.append(rand_list)
                 rand_num = random.sample(range(len(rand_s)), seg_num3)
                 rand_num.sort()
                 ed_list.append([rand_s[i] for i in rand_num])
@@ -148,8 +134,6 @@ def sample_seg_impro(orig_list, seg_num=100, seg_num2=64, seg_num3=32, dataaug=2
                     rand_n = np.random.randint(len(seg) - seg_num2 + 1, size=1)
                     m_list.append(seg[int(rand_n):int(rand_n) + seg_num2])
             for rand_s in m_list:
-                # rand_list = random.sample(rand_s, 32)
-                # ed_list.append(rand_list)
                 rand_num = random.sample(range(len(rand_s)), seg_num3)
                 rand_num.sort()
                 ed_list.append([rand_s[i] for i in rand_num])
@@ -163,8 +147,6 @@ def sample_seg_impro(orig_list, seg_num=100, seg_num2=64, seg_num3=32, dataaug=2
             rand_n = np.random.randint(seg_num - seg_num2 + 1, size=1)
             m_list.append(seg[int(rand_n):int(rand_n) + seg_num2])
     for rand_s in m_list:
-        # rand_list = random.sample(rand_s, 32)
-        # ed_list.append(rand_list)
         rand_num = random.sample(range(seg_num2), seg_num3)
         rand_num.sort()
         ed_list.append([rand_s[i] for i in rand_num])
@@ -192,14 +174,6 @@ class FrameAttentionDataSet(data.Dataset):
 
         for item, fatigue in image_label:
             img = Image.open(item).convert("RGB")
-            # img_cv2 = cv2.imread(item)
-            # img_resize = image_preporcess(img_cv2)
-            # img_from_cv2 = Image.fromarray(np.uint8(img_resize[:, :, ::-1]))
-            # img = img_from_cv2
-            # if self.transform is not None:
-            #     img_ = self.transform(img)
-            # else:
-            #     img_ = img
             img_ = img
             image_list.append(img_)
 
@@ -212,12 +186,6 @@ class FrameAttentionDataSet(data.Dataset):
         if self.transformVideoAug is not None:
                 image_list = self.transformVideoAug(image_list)
 
-        #if index % 2 == 0:
-        #    if self.transformVideoAug is not None:
-        #        image_list = self.transformVideoAug(image_list)
-        #else:
-        #    if self.transformVideoAug_com is not None:
-        #        image_list = self.transformVideoAug_com(image_list)
 
         if self.transform is not None:
             image_list = [self.transform(image) for image in image_list]
@@ -291,62 +259,6 @@ def load_imgs_numpy(video_root, video_list, data_doubled=False, Nclass=10):
     return imgs_first, index
 
 
-'''
-====================================================cam===================================================
-'''
-
-def load_imgs_total_frame_cam(video_root, video_name):
-    imgs_first_dict = {}
-    imgs_first = []
-    index = []
-
-    video_path = os.path.join(video_root, video_name[:video_name.rfind('.')])
-    img_lists = os.listdir(video_path)
-    img_lists.sort(key=lambda x: int(x.split('.')[0]))  # sort files by ascending
-    imgs_first_dict[video_name] = []
-    for frame in img_lists:
-        imgs_first_dict[video_name].append(
-            (os.path.join(video_path, frame)))
-    ###  return video frame index  #####
-    ed_list = sample_seg(imgs_first_dict[video_name])
-    for id, seg_list in enumerate(ed_list):
-        imgs_first.append(seg_list)
-        index.append(np.ones(len(seg_list)) * id)
-
-    ind = np.arange(0, len(index), 1)
-
-    return imgs_first, ind
-
-class LoadData_cam():
-    def __init__(self, video_root, video_list, transform=None, transformVideoAug=None):
-
-        self.video_root = video_root
-        self.video_list = video_list
-        self.transform = transform
-        self.transformVideoAug = transformVideoAug
-
-    def image_process(self):
-        imgs_dict, dict_index = load_imgs_total_frame_cam(self.video_root, self.video_list)
-        image_all = []
-        for i in range(len(imgs_dict)):
-            image_list = []
-            image_clips = imgs_dict[i]
-            for item in image_clips:
-
-                img = Image.open(item).convert("RGB")
-                image_list.append(img)
-
-            if self.transformVideoAug is not None:
-                image_list = self.transformVideoAug(image_list)
-
-            if self.transform is not None:
-                image_list = [self.transform(image) for image in image_list]
-
-            image_list = torch.stack(image_list, dim=0)
-            image_all.append(image_list)
-        image_all = torch.stack(image_all)
-
-        return image_all, imgs_dict
 
 
 
