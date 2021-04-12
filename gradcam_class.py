@@ -94,6 +94,7 @@ def cams_on_img_seqs(cams, input_img):
         # Opencv loads as BGR:
         img = img.transpose((1, 2, 0))
         cam = show_cam_on_image(img, cams[i, :, :])
+        cam = cam[:, :, ::-1]
         cam = Image.fromarray(cam)
         cam_seqs.append(cam)
     return cam_seqs
