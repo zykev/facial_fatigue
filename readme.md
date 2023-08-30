@@ -72,12 +72,12 @@ The setting of training hyper-parameters:
 '--arg_rootTrain', default=None, type=str, help='the path of train sample '
 '--arg_rootEval', default=None, type=str, help='the path of eval sample '
 ```
-## Technique Report
+## Technical Report
 The working paper for this project can be obtained at https://arxiv.org/abs/2104.10420.
 
-## Necessary Attachment
+## Other Attachment
 
-We transferred our network for a pre-trained 2D ResNet-18 model using MS-Celeb-1M dataset, which can be found [here.](https://github.com/kaiwang960112/Challenge-condition-FER-dataset) LFD dataset can be obtained after contacting the authors.
+We transferred our network for a pre-trained 2D ResNet-18 model using MS-Celeb-1M dataset, which can be found [here.](https://github.com/kaiwang960112/Challenge-condition-FER-dataset) LFD dataset may be obtained after contacting the authors. For business consideration, the pre-trained weights would not be provided.
 
 
 
