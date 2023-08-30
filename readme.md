@@ -72,6 +72,8 @@ The setting of training hyper-parameters:
 '--arg_rootTrain', default=None, type=str, help='the path of train sample '
 '--arg_rootEval', default=None, type=str, help='the path of eval sample '
 ```
+## Technique Report
+The working paper for this project can be obtained at https://arxiv.org/abs/2104.10420.
 
 ## Necessary Attachment
 
